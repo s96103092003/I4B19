@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+    </style>
+</head>
+
+<body>
+    <div style="position:absolute;top:20px;width:100%;background:pink;text-align:left">
+        <table>
+            <tr>
+                <td>W/S調整砲管高度</td>
+            </tr>
+            <tr>
+                <td>A/D調整砲台角度</td>
+            </tr>
+            <tr>
+                <td>L/K左右行走</td>
+            </tr>
+            <tr>
+                <td>tab隨機產生目標</td>
+            </tr>
+            <tr>
+                <td>shift切換視角</td>
+            </tr>
+            <tr>
+                <td>space發射</td>
+            </tr>
+        </table>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/84/three.min.js">
+    </script>
+    <script src="https://threejs.org/examples/js/controls/OrbitControls.js">
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r16/Stats.min.js"></script>
+    <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+    <script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://jyunming-chen.github.io/tutsplus/js/KeyboardState.js"></script>
+
+    <script>
+        var keyboard = new KeyboardState();
+        var renderer, camera, controls, scene, axes;
+        var stopped = true;
+        var theta1 = -0;
+        var theta2 = 0;
+
+        var model;
+        var model_base;
+        var model_turret;
+        var model_turn;
+        var model_connon;
+
+        var pos, vel, force;
+        var ball;
+        var sign = false;
+        var gridXZ;
+        var spotLight;
+        var spotLightShadowHelper;
+        var spotLightHelper;
+
+        var target;
+        var Vision = new THREE.Vector3();
+
+        init();
+        animate();
+
+        function buildParts() {
+            var parts = [];
+
+            var mat = new THREE.MeshPhongMaterial({ color: 227700 });
+            //var mat = new THREE.MeshNormalMaterial();
+
+            var base = new THREE.Object3D();
+            var baseMesh = new THREE.Mesh(new THREE.BoxGeometry(40, 10, 20), mat);
+            base.add(baseMesh);
+            baseMesh.position.set(-10, 5, 0);
+            parts.push(base);
+
+            var turret = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 10, 30), mat);
+            parts.push(turret);
+
+            var turn = new THREE.Object3D();
+            var turnMesh = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 10, 30), mat);
+            turn.add(turnMesh);
+            turnMesh.rotation.x = Math.PI / 2;
+            parts.push(turn);
+
+            var cannon = new THREE.Object3D()
+            var cannon0 = new THREE.Object3D()
+            var cannonMesh = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 10, 30), mat);
+            cannon0.add(cannonMesh);
+            cannonMesh.position.y = 5;
+            cannon.add(cannon0);
+            cannon0.rotation.z = -Math.PI / 2;
+            parts.push(cannon);
+
+            return parts;
+        }
+
+        function buildTank() {
+
+            let parts = buildParts();
+
+            let tank = new THREE.Object3D();
+
+            model_base = parts[0]
+            tank.add(model_base);
+
+            model_turret = parts[1]
+            tank.add(model_turret)
+            model_turret.position.set(0, 15, 0);
+            console.log(theta1);
+            model_turret.rotation.y = theta1;
+
+            model_turn = parts[2]
+            model_turn.position.x = 10
+            model_turn.rotation.z = theta2;
+            model_turret.add(model_turn);
+
+            model_cannon = parts[3]
+            model_turn.add(model_cannon);
+
+            return tank;
+        }
+
+        function init() {
+
+            renderer = new THREE.WebGLRenderer({
+                //antialias: true
+            });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x888888);
+            //レンダラーに影描画設定追加
+            document.body.appendChild(renderer.domElement);
+            renderer.shadowMap.enabled = true;
+            renderer.gammaInput = true;//光澤
+            renderer.gammaOutput = true;
+
+            scene = new THREE.Scene();
+
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
+            camera.position.set(0, 250, 40);
+
+            //camera.position.y = 300;  // important
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+            controls.minDistance = 20;
+            controls.maxDistance = 500;
+            controls.enablePan = false;
+
+
+            gridXZ = new THREE.GridHelper(400, 20, 'red', 'white');
+            scene.add(gridXZ);
+            //var spotLight = new THREE.SpotLight( hex, intensity, distance, angle, penumbra, decay );
+            //光色,強度,距離,角度,半影,衰減
+            spotLight = new THREE.SpotLight(0xffffff, 1);
+            spotLight.position.set(30, 100, 60);
+
+            spotLight.angle = Math.PI / 4;
+            spotLight.penumbra = 0.05;
+            spotLight.decay = 2;
+            spotLight.distance = 200;
+
+            spotLight.castShadow = true;//生成影子
+            spotLight.shadow.mapSize.width = 1024;
+            spotLight.shadow.mapSize.height = 1024;
+            spotLight.shadow.camera.near = 10;//最短距離指定生成陰影的光源的最短距離
+            spotLight.shadow.camera.far = 200;//指定生成陰影最長距離陰影的光源的最長距離。默認值是5000。
+
+            //spotLight.shadow.camera.fov = THREE.Math.radToDeg(2 * spotLight.angle);//指定生成陰影角度陰影的光源的角度
+            //spotLight.shadow.mapSize.width = spotLight.shadow.mapSize.height = 1024;//指定陰影的細度。基本上兩個將是平等的。缺省值是512。
+            scene.add(spotLight);
+
+            spotLightShadowHelper = new THREE.CameraHelper(spotLight.shadow.camera);
+            scene.add(spotLightShadowHelper);
+
+            spotLightHelper = new THREE.SpotLightHelper(spotLight);
+            scene.add(spotLightHelper);
+
+
+            model = buildTank();
+            scene.add(model);
+            model.receiveShadow = true;
+            Vision.set(model.position.x, model.position.y, model.position.z);
+
+            var geometry = new THREE.SphereGeometry(1.5, 20, 20);
+            ball = new THREE.Mesh(geometry, new THREE.MeshNormalMaterial());
+
+            pos = new THREE.Vector3();//結束位子
+            vel = new THREE.Vector3();//發射位子
+            force = new THREE.Vector3(0, -10, 0);//承受力量方向
+            pos.set(model.position.x, model_turret.position.y, model_turret.position.z);
+            scene.add(ball);
+
+            target = buildTarget();
+            target.rotation.y = Math.PI / 2;
+            target.position.y = 10;
+            target.visible = false;
+            scene.add(target);
+
+            //10*Math.cos(90*model_turret.rotation.y)
+
+        }
+        function buildTarget() {
+            var aou = new THREE.Object3D();
+            var target_geometry = new THREE.RingGeometry(1, 10, 32);
+            var target_material = new THREE.MeshBasicMaterial({
+                color: 0xFFFFFF,
+                side: THREE.DoubleSide
+            });
+            var mesh = new THREE.Mesh(target_geometry, target_material);
+
+            var geometry_Associate = new THREE.RingGeometry(0.5, 3, 32);
+
+            var material_Associate = new THREE.MeshBasicMaterial({
+                color: 0xFF0000,
+                side: THREE.DoubleSide
+            });
+            var backgroung = new THREE.Mesh(geometry_Associate, material_Associate);
+            aou.add(mesh);
+            aou.add(backgroung);
+            return aou;
+        }
+        function start() {
+            stopped = false;
+
+            if (model.rotation.y == 0) {
+                pos.set(model.position.x + 20 * Math.cos(model_turret.rotation.y), model_turret.position.y + 10 * Math.sin(model_turn.rotation.z), -20 * Math.sin(model_turret.rotation.y));
+                vel.set(1, Math.tan(model_turn.rotation.z), -Math.tan(model_turret.rotation.y)).normalize().multiplyScalar(35);
+            }
+            else {
+                pos.set(model.position.x - 20 * Math.cos(model_turret.rotation.y), model_turret.position.y + 10 * Math.sin(model_turn.rotation.z), 20 * Math.sin(model_turret.rotation.y));
+                //Math.cos(90*model_turn.rotation.z)
+                vel.set(-1, Math.tan(model_turn.rotation.z), Math.tan(model_turret.rotation.y)).normalize().multiplyScalar(35);
+            }
+            console.log("model_turret.rotation.y: " + model_turret.rotation.y);
+            console.log("sin: " + Math.sin(model_turret.rotation.y));
+            //pos.set (200*Math.random()-100, 0, 200*Math.random()-100);
+
+            //.normalize().multiplyScalar(50);設多遠
+        }
+
+        function update(dt) {
+            vel.add(force.clone().multiplyScalar(dt));//看不懂
+            pos.add(vel.clone().multiplyScalar(dt));//看不懂
+
+            if (pos.y < 0) {
+                pos.set(model.position.x, model_turret.position.y, model_turret.position.z);
+                stopped = true;
+            }
+        }
+        function animate() {
+            controls.update();
+            spotLightHelper.update();
+            spotLightShadowHelper.update();
+            if (sign) {
+                if (model.rotation.y == 0) {
+                    Vision.set(model.position.x + 20 * Math.cos(model_turret.rotation.y), model_turret.position.y + 10 * Math.sin(model_turn.rotation.z), -20 * Math.sin(model_turret.rotation.y));
+
+                }
+                else {
+                    Vision.set(model.position.x - 20 * Math.cos(model_turret.rotation.y), model_turret.position.y + 10 * Math.sin(model_turn.rotation.z), 20 * Math.sin(model_turret.rotation.y));
+
+                }
+                if (model.rotation.y == 0) {
+                    camera.position.x = model_turret.position.x;
+                }
+                else {
+                    camera.position.x = model_turret.position.x;
+
+                }
+                camera.position.x = model.position.x;;
+                camera.lookAt(Vision);
+            }
+            camera.lookAt(Vision);
+            renderer.render(scene, camera);
+
+            if (keyboard.pressed('A')) {
+                model_turret.rotation.y += 0.02;
+                if (model_turret.rotation.y > 1) {
+                    model_turret.rotation.y = 1;
+                }
+            }
+            else if (keyboard.pressed('D')) {
+                model_turret.rotation.y -= 0.02;
+                if (model_turret.rotation.y < -1) {
+                    model_turret.rotation.y = -1;
+                }
+            }
+            if (keyboard.pressed('S')) {
+                model_turn.rotation.z -= 0.02;
+                if (model_turn.rotation.z < -0.5) {
+                    model_turn.rotation.z = -0.5
+                }
+                console.log("123: " + model_turn.rotation.z);
+            }
+            else if (keyboard.pressed('W')) {
+                model_turn.rotation.z += 0.02;
+                if (model_turn.rotation.z > 0.9) {
+                    model_turn.rotation.z = 0.9
+                }
+                console.log("123: " + model_turn.rotation.z);
+            }
+            else if (keyboard.pressed('K')) {
+                keyboard.update();
+                model.rotation.y = Math.PI;
+                model.position.x -= 0.2;
+                pos.x = model.position.x;
+
+            }
+            else if (keyboard.pressed('L')) {
+                keyboard.update();
+                model.rotation.y = 0;
+                model.position.x += 0.2;
+                pos.x = model.position.x;
+
+            }
+            if (keyboard.down('tab')) {
+                keyboard.update();
+                target.visible = true;
+                if (Math.random() > 0.5) {
+                    target.position.x = 100;
+                }
+                else {
+                    target.position.x = -100;
+                }
+            }
+            if (keyboard.down('shift')) {
+                keyboard.update();
+                if (sign) {
+                    sign = false;
+                    Vision.set(0, 0, 0);
+                    camera.lookAt(Vision);
+                    camera.position.set(0, 250, 40);
+                }
+                else {
+                    if (model.rotation.y == 0) {
+                        camera.position.set(model_turret.position.x, model_turret.position.y, 0);
+                    }
+                    else {
+                        camera.position.set(model_turret.position.x, model_turret.position.y, 0);
+
+                    }
+                    sign = true;
+                }
+
+            }
+
+            ball.position.copy(pos);
+            if (stopped) {
+                keyboard.update();
+                if (keyboard.down("space")) start();
+            } else {
+                update(0.1);
+            }
+
+            requestAnimationFrame(animate);
+
+        }
+
+    </script>
+</body>
+
+</html>
