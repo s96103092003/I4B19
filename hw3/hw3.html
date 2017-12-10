@@ -51,6 +51,7 @@
             //objLoader.setPath( options.objPath )//设置obj文件所在路径
             //objLoader.load( filename,onSuccess(object ),onProgress(xhr),onError(error))：obj文件名、 加载成功后回调处理(参数为生成的三维对象)、加载过程中回调处理(xhr对象属性可计算出已完成加载百分比)、失败回调处理。
             var mtlLoader = new THREE.MTLLoader();
+            mtlLoader.setPath("lamborghini-aventador-irridescent-paint-obj/");
             mtlLoader.load('lamborghini-aventador-irridescent-paint.mtl', function (materials) {
                 materials.preload();
                 var objLoader = new THREE.OBJLoader();
