@@ -21,7 +21,7 @@
 
     <script>
         var keyboard = new KeyboardState();
-        var renderer, camera, controls, scene, axes;
+        var renderer, camera, camera2, controls, controls2,scene, axes;
         var clock;
 
         var pos = new THREE.Vector3();
@@ -32,7 +32,7 @@
         var spotLight;
         var spotLightShadowHelper;
         var spotLightHelper;
-        var crash = false;
+        var k = 0, sign = 1;
         (function () {
             Math.clamp = function (val, min, max) {
                 return Math.min(Math.max(val, min), max);
@@ -51,13 +51,13 @@
             //objLoader.setPath( options.objPath )//设置obj文件所在路径
             //objLoader.load( filename,onSuccess(object ),onProgress(xhr),onError(error))：obj文件名、 加载成功后回调处理(参数为生成的三维对象)、加载过程中回调处理(xhr对象属性可计算出已完成加载百分比)、失败回调处理。
             var mtlLoader = new THREE.MTLLoader();
-            mtlLoader.setPath("lamborghini-aventador-irridescent-paint-obj/");
-            mtlLoader.load('lamborghini-aventador-irridescent-paint.mtl', function (materials) {
+            mtlLoader.setPath("https://s96103092003.github.io/I4B19/hw3/");
+            mtlLoader.load('strts.mtl', function (materials) {
                 materials.preload();
                 var objLoader = new THREE.OBJLoader();
                 objLoader.setMaterials(materials);
-                objLoader.setPath("lamborghini-aventador-irridescent-paint-obj/");
-                objLoader.load('lamborghini-aventador-irridescent-paint.obj', function (object) {
+                objLoader.setPath("https://s96103092003.github.io/I4B19/hw3/");
+                objLoader.load('strts.obj', function (object) {
 
                     var theObject = unitize(object, 20);
                     theObject.position.set(0, 0, 0);
@@ -65,7 +65,7 @@
                     scene.add(theObject);
                     car = theObject;
                     console.log(car.position)
-                    //object.rotation.y = -Math.PI / 2;
+                    object.rotation.y = -Math.PI / 2;
                     theObject.traverse(function (mesh) {
                         if (mesh instanceof THREE.Mesh) {
                             mesh.material.bumpScale = 20;
@@ -93,13 +93,13 @@
         function buildObstacle() {
             var texture = new THREE.Texture();
             var mtlLoader = new THREE.MTLLoader();
-            mtlLoader.setPath("Pagoda/");
-            mtlLoader.load('Pagoda.mtl', function (materials) {
+            mtlLoader.setPath("https://s96103092003.github.io/I4B19/hw3/");
+            mtlLoader.load('eiffel-tower-big-ben.mtl', function (materials) {
                 materials.preload();
                 var objLoader = new THREE.OBJLoader();
                 objLoader.setMaterials(materials);
-                objLoader.setPath("Pagoda/");
-                objLoader.load('Pagoda.obj', function (object) {
+                objLoader.setPath("https://s96103092003.github.io/I4B19/hw3/");
+                objLoader.load('eiffel-tower-big-ben.obj', function (object) {
 
                     var theObject = unitize(object, 100);
 
@@ -146,6 +146,13 @@
 
             return theObject;
         }
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera2.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            camera2.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
         function init() {
 
             renderer = new THREE.WebGLRenderer({
@@ -154,32 +161,41 @@
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setClearColor(0x888888);
+            renderer.autoClear = false;
             //レンダラーに影描画設定追加
             document.body.appendChild(renderer.domElement);
             renderer.shadowMap.enabled = true;
             renderer.gammaInput = true;//光澤
             renderer.gammaOutput = true;
+
             clock = new THREE.Clock();
             scene = new THREE.Scene();
 
             camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
             camera.position.set(0, 250, 40);
 
+            camera2 = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
+            camera2.position.set(50, 10, 0);
+
+            scene.add(camera);
+            scene.add(camera2);
             //camera.position.y = 300;  // important
 
             controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls2 = new THREE.OrbitControls(camera2, renderer.domElement);
 
             controls.minDistance = 20;
             controls.maxDistance = 500;
             controls.enablePan = false;
-
-
+            controls2.enableKeys = false;
+            window.addEventListener('resize', onWindowResize, false);
+            
             gridXZ = new THREE.GridHelper(400, 20, 'red', 'white');
             scene.add(gridXZ);
             //var spotLight = new THREE.SpotLight( hex, intensity, distance, angle, penumbra, decay );
             //光色,強度,距離,角度,半影,衰減
             spotLight = new THREE.SpotLight(0xffffff, 1);
-            spotLight.position.set(30, 100, 60);
+            spotLight.position.set(30, 50, 60);
 
             spotLight.angle = Math.PI / 4;
             spotLight.penumbra = 0.05;
@@ -191,6 +207,7 @@
             spotLight.shadow.mapSize.height = 1024;
             spotLight.shadow.camera.near = 10;//最短距離指定生成陰影的光源的最短距離
             spotLight.shadow.camera.far = 200;//指定生成陰影最長距離陰影的光源的最長距離。默認值是5000。
+            
 
             //spotLight.shadow.camera.fov = THREE.Math.radToDeg(2 * spotLight.angle);//指定生成陰影角度陰影的光源的角度
             //spotLight.shadow.mapSize.width = spotLight.shadow.mapSize.height = 1024;//指定陰影的細度。基本上兩個將是平等的。缺省值是512。
@@ -208,26 +225,6 @@
             buildObstacle();
 
         }
-
-        function start() {
-            stopped = false;
-
-            if (model.rotation.y == 0) {
-                pos.set(model.position.x + 20 * Math.cos(model_turret.rotation.y), model_turret.position.y + 10 * Math.sin(model_turn.rotation.z), -20 * Math.sin(model_turret.rotation.y));
-                vel.set(1, Math.tan(model_turn.rotation.z), -Math.tan(model_turret.rotation.y)).normalize().multiplyScalar(35);
-            }
-            else {
-                pos.set(model.position.x - 20 * Math.cos(model_turret.rotation.y), model_turret.position.y + 10 * Math.sin(model_turn.rotation.z), 20 * Math.sin(model_turret.rotation.y));
-                //Math.cos(90*model_turn.rotation.z)
-                vel.set(-1, Math.tan(model_turn.rotation.z), Math.tan(model_turret.rotation.y)).normalize().multiplyScalar(35);
-            }
-            console.log("model_turret.rotation.y: " + model_turret.rotation.y);
-            console.log("sin: " + Math.sin(model_turret.rotation.y));
-            //pos.set (200*Math.random()-100, 0, 200*Math.random()-100);
-
-            //.normalize().multiplyScalar(50);設多遠
-        }
-
         function update(dt) {
             keyboard.update();
             if (keyboard.pressed('A')) {
@@ -247,27 +244,29 @@
                 console.log(speed);
             }
             speed = Math.clamp(speed, -20, 40);
-            
+
             vel = new THREE.Vector3(-speed, 0, 0);
 
             vel.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);//旋轉用的
             pos.add(vel.clone().multiplyScalar(dt));
         }
         function animate() {
-            controls.update();
+            controls2.update();
+            //controls2.update();
             spotLightHelper.update();
             spotLightShadowHelper.update();
-            renderer.render(scene, camera);
 
             var dt = clock.getDelta();
             update(dt);
             //console.log("123: " + car);
             console.log("car: " + car);
             console.log("obstacle: " + obstacle);
-            if (car != undefined && obstacle!= undefined) {
+            if (car != undefined && obstacle != undefined) {
                 car.position.copy(pos);
                 car.rotation.y = angle;
-
+                //sssscamera2.rotation.y = angle;
+                camera2.position.set(car.position.x + 50, 10, car.position.z);
+                camera2.lookAt(car.position);
                 var distance = car.position.distanceTo(obstacle.position);//距離
                 if (distance < 19) {
                     speed = 0;
@@ -275,7 +274,29 @@
             }
 
             requestAnimationFrame(animate);
+            render();
 
+        }
+        function render() {
+            var WW = window.innerWidth;
+            var HH = window.innerHeight;
+
+
+            renderer.setScissor(k, k, WW - 2 * k, HH - 2 * k);
+            renderer.enableScissorTest(true);
+
+            renderer.clear();
+            camera.aspect = WW / 2 / HH;
+            camera.updateProjectionMatrix();
+
+            renderer.setViewport(0, 0, WW / 2, HH);
+            renderer.render(scene, camera);
+
+            camera2.aspect = WW / 2 / HH;
+            camera2.updateProjectionMatrix();
+
+            renderer.setViewport(WW / 2, 0, WW / 2, HH);
+            renderer.render(scene, camera2);
         }
 
     </script>
