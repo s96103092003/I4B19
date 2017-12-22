@@ -21,7 +21,7 @@
 
     <script>
         var keyboard = new KeyboardState();
-        var renderer, camera, camera2, controls, controls2,scene, axes;
+        var renderer, camera, camera2, controls, controls2, scene, axes;
         var clock;
 
         var pos = new THREE.Vector3();
@@ -101,13 +101,18 @@
                 objLoader.setPath("https://s96103092003.github.io/I4B19/hw3/");
                 objLoader.load('eiffel-tower-big-ben.obj', function (object) {
 
-                    var theObject = unitize(object, 100);
-
                     theObject.position.set(-100, 0, 0);
                     obstacle = theObject;
                     //theObject.rotation.y = rotateAngle;
                     theObject.traverse(function (mesh) {
                         if (mesh instanceof THREE.Mesh) {
+                            //mesh.material.side = THREE.DoubleSide;//设置贴图模式为双面贴图
+                            //mesh.material.emissive.r = 0;//设置rgb通道R通道颜色
+                            //mesh.material.emissive.g = 0.01;//设置rgb通道G通道颜色
+                            //mesh.material.emissive.b = 0.05;//设置rgb通道B通道颜色
+                            //mesh.material.transparent = true;//材质允许透明
+                            //child.material.opacity=0;//材质默认透明度                        
+                            //child.material.shading=THREE.SmoothShading;//平滑渲染
                             mesh.material.bumpScale = 20;
                         }
                     });
@@ -118,6 +123,13 @@
                     object.traverse(
                         function (mesh) {
                             if (mesh instanceof THREE.Mesh) {
+                                //mesh.material.side = THREE.DoubleSide;//设置贴图模式为双面贴图
+                                //mesh.material.emissive.r = 0;//设置rgb通道R通道颜色
+                                //mesh.material.emissive.g = 0.01;//设置rgb通道G通道颜色
+                                //mesh.material.emissive.b = 0.05;//设置rgb通道B通道颜色
+                                //mesh.material.transparent = true;//材质允许透明
+                                //child.material.opacity=0;//材质默认透明度                        
+                                //child.material.shading=THREE.SmoothShading;//平滑渲染
                                 mesh.material.side = THREE.DoubleSide;
                             }
                         });
@@ -189,7 +201,7 @@
             controls.enablePan = false;
             controls2.enableKeys = false;
             window.addEventListener('resize', onWindowResize, false);
-            
+
             gridXZ = new THREE.GridHelper(400, 20, 'red', 'white');
             scene.add(gridXZ);
             //var spotLight = new THREE.SpotLight( hex, intensity, distance, angle, penumbra, decay );
@@ -207,7 +219,7 @@
             spotLight.shadow.mapSize.height = 1024;
             spotLight.shadow.camera.near = 10;//最短距離指定生成陰影的光源的最短距離
             spotLight.shadow.camera.far = 200;//指定生成陰影最長距離陰影的光源的最長距離。默認值是5000。
-            
+
 
             //spotLight.shadow.camera.fov = THREE.Math.radToDeg(2 * spotLight.angle);//指定生成陰影角度陰影的光源的角度
             //spotLight.shadow.mapSize.width = spotLight.shadow.mapSize.height = 1024;//指定陰影的細度。基本上兩個將是平等的。缺省值是512。
