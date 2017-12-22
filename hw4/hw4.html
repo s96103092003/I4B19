@@ -20,29 +20,61 @@
     <script src="./OBJLoader.js"></script>
 
     <script>
-        var keyboard = new KeyboardState();
-        var renderer, camera, camera2, controls, controls2,scene, axes;
-        var clock;
-
-        var pos = new THREE.Vector3();
-        var speed = 0, angle = 0, vel;
-        var car;
-        var obstacle;
-        var gridXZ;
-        var spotLight;
-        var spotLightShadowHelper;
-        var spotLightHelper;
-        var k = 0, sign = 1;
-        (function () {
-            Math.clamp = function (val, min, max) {
-                return Math.min(Math.max(val, min), max);
-
+        class Button {
+            constructor(color, name) {
+                this.on = false;
+                this.hex = color;
+                this.obj = this.makeButton(name);
             }
-        })();
+
+            get isOn() {
+                return this.on;
+            }
+
+            toggle() {
+                this.on = !this.on;
+                this.update();
+            }
+
+            update() {
+                if (this.on) {
+                    this.obj.scale.set(1, 0.5, 1);
+                    this.obj.children[0].material.color.setHex
+                        (this.hex);
+                } else {
+                    this.obj.scale.set(1, 1, 1);
+                    this.obj.children[0].material.color.setHex
+                        (this.hex);
+                }
+            }
+            makeButton(name) {
+                let mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1.6, 1),
+                    new THREE.MeshLambertMaterial());
+                let button = new THREE.Object3D();
+                button.add(mesh);
+                mesh.material.color.setHex(this.hex);
+                mesh.position.y = 1;
+                button.name = name;  // a string
+                return button;
+            }
+
+        }
+
+        var renderer, camera, camera2, controls, scene, axes;
+        var clock;
+        var pickables = [];
+        var raycaster = new THREE.Raycaster();
+        var mouse = new THREE.Vector2()
+        var chair, table, book, lamp;
+
+        var gridXZ;
+        var roomLight, lampLight;
+
+        var base_url = 'https://s96103092003.github.io/I4B19/hw4/';
         init();
         animate();
 
-        function buildTank() {
+        function buildChair() {
             var mtlLoader = new THREE.MTLLoader();
             //mtlLoader.setBaseUrl("???")//设置材质路径
             //mtlLoader.setPath("???")//设置mtl文件所在路径
@@ -51,30 +83,45 @@
             //objLoader.setPath( options.objPath )//设置obj文件所在路径
             //objLoader.load( filename,onSuccess(object ),onProgress(xhr),onError(error))：obj文件名、 加载成功后回调处理(参数为生成的三维对象)、加载过程中回调处理(xhr对象属性可计算出已完成加载百分比)、失败回调处理。
             var mtlLoader = new THREE.MTLLoader();
-            mtlLoader.setPath("https://s96103092003.github.io/I4B19/hw3/");
-            mtlLoader.load('strts.mtl', function (materials) {
+            mtlLoader.setPath(base_url);
+            mtlLoader.load('chair.mtl', function (materials) {
                 materials.preload();
                 var objLoader = new THREE.OBJLoader();
                 objLoader.setMaterials(materials);
-                objLoader.setPath("https://s96103092003.github.io/I4B19/hw3/");
-                objLoader.load('strts.obj', function (object) {
-
+                objLoader.setPath(base_url);
+                objLoader.load('chair.obj', function (object) {
                     var theObject = unitize(object, 20);
-                    theObject.position.set(0, 0, 0);
-                    console.log(theObject.position)
+                    theObject.position.set(0, 0, 10);
+                    theObject.rotation.y = Math.PI;
                     scene.add(theObject);
-                    car = theObject;
-                    console.log(car.position)
-                    object.rotation.y = -Math.PI / 2;
+                    chair = theObject;
                     theObject.traverse(function (mesh) {
                         if (mesh instanceof THREE.Mesh) {
+                            //mesh.material.side = THREE.DoubleSide;//设置贴图模式为双面贴图
+                            //mesh.material.emissive.r = 0;//设置rgb通道R通道颜色
+                            //mesh.material.emissive.g = 0.01;//设置rgb通道G通道颜色
+                            //mesh.material.emissive.b = 0.05;//设置rgb通道B通道颜色
+                            //mesh.material.transparent = true;//材质允许透明
+                            //child.material.opacity=0;//材质默认透明度                        
+                            //child.material.shading=THREE.SmoothShading;//平滑渲染
+                            mesh.material.bumpScale = 20;
                             mesh.material.bumpScale = 20;
                         }
                     });
-                    scene.add(new THREE.BoxHelper(theObject));
-                    object.traverse(function (mesh) {
+                    scene.add(theObject);
+                    theObject.traverse(function (mesh) {
                         if (mesh instanceof THREE.Mesh) {
+                            //mesh.material.side = THREE.DoubleSide;//设置贴图模式为双面贴图
+                            //mesh.material.emissive.r = 0;//设置rgb通道R通道颜色
+                            //mesh.material.emissive.g = 0.01;//设置rgb通道G通道颜色
+                            //mesh.material.emissive.b = 0.05;//设置rgb通道B通道颜色
+                            //mesh.material.transparent = true;//材质允许透明
+                            //child.material.opacity=0;//材质默认透明度                        
+                            //child.material.shading=THREE.SmoothShading;//平滑渲染
                             mesh.material.bumpScale = 20;
+                            mesh.material.bumpScale = 20;
+                            mesh.receiveShadow = true;
+                            mesh.castShadow = true;
                         }
                     });
                 }, function (xhr) {
@@ -90,40 +137,97 @@
 
             });
         }
-        function buildObstacle() {
+        function buildControl() {
+            var control = new THREE.Object3D();
+
+            var geometry = new THREE.BoxGeometry(1.5, 1.5, 4);
+            var material = new THREE.MeshBasicMaterial({ color: 0x444444 });
+
+            var cube = new THREE.Mesh(geometry, material);
+            cube.receiveShadow = true;
+            cube.castShadow = true;
+            control.add(cube);
+            cube.position.set(0, 19, 0);
+
+            roomButton = new Button(new THREE.Color(0x12ffff), 'roomButton');
+            control.add(roomButton.obj);
+            roomButton.obj.position.set(0, 19, -0.7);
+            pickables.push(roomButton.obj);
+            scene.add(roomButton.obj);
+
+            lampButton = new Button(new THREE.Color(0x12ffff), 'lampButton');
+            control.add(lampButton.obj);
+            lampButton.obj.position.set(0, 19, 1.3);
+            pickables.push(lampButton.obj);
+            scene.add(lampButton.obj);
+            return control;
+        }
+
+        function buildTable() {
             var texture = new THREE.Texture();
             var mtlLoader = new THREE.MTLLoader();
-            mtlLoader.setPath("https://s96103092003.github.io/I4B19/hw3/");
-            mtlLoader.load('eiffel-tower-big-ben.mtl', function (materials) {
+            mtlLoader.setPath(base_url);
+            mtlLoader.load('table.mtl', function (materials) {
                 materials.preload();
                 var objLoader = new THREE.OBJLoader();
                 objLoader.setMaterials(materials);
-                objLoader.setPath("https://s96103092003.github.io/I4B19/hw3/");
-                objLoader.load('eiffel-tower-big-ben.obj', function (object) {
-
-                    var theObject = unitize(object, 100);
-
-                    theObject.position.set(-100, 0, 0);
-                    obstacle = theObject;
+                objLoader.setPath(base_url);
+                objLoader.load('table.obj', function (object) {
+                    var theObject = unitize(object, 35);
+                    theObject.position.set(0, 0, 0);
+                    table = theObject;
+                    console.log(typeof table);
                     //theObject.rotation.y = rotateAngle;
                     theObject.traverse(function (mesh) {
                         if (mesh instanceof THREE.Mesh) {
                             mesh.material.bumpScale = 20;
                         }
                     });
-
-                    scene.add(new THREE.BoxHelper(theObject));
                     scene.add(theObject);
-
-                    object.traverse(
+                    theObject.traverse(
                         function (mesh) {
                             if (mesh instanceof THREE.Mesh) {
+                                mesh.material.bumpScale = 20;
                                 mesh.material.side = THREE.DoubleSide;
+                                mesh.receiveShadow = true;
+                                mesh.castShadow = true;
                             }
                         });
                 });
             });
-            var objLoader = new THREE.OBJLoader();
+        }
+        function buildLamp() {
+            var mtlLoader = new THREE.MTLLoader();
+            mtlLoader.setPath(base_url);
+            mtlLoader.load('lamp.mtl', function (materials) {
+                materials.preload();
+                var objLoader = new THREE.OBJLoader();
+                objLoader.setMaterials(materials);
+                objLoader.setPath(base_url);
+                objLoader.load('lamp.obj', function (object) {
+                    var theObject = unitize(object, 10);
+                    theObject.position.set(-14, 16.9, -4.5);
+                    theObject.rotation.y = Math.PI / 4;
+                    theObject.rotation.x = -Math.PI / 8;
+                    lamp = theObject;
+                    theObject.traverse(function (mesh) {
+                        if (mesh instanceof THREE.Mesh) {
+                            mesh.material.bumpScale = 20;
+                        }
+                    });
+                    scene.add(theObject);
+
+                    theObject.traverse(
+                        function (mesh) {
+                            if (mesh instanceof THREE.Mesh) {
+                                mesh.material.bumpScale = 20;
+                                mesh.material.side = THREE.DoubleSide;
+                                mesh.receiveShadow = true;
+                                mesh.castShadow = true;
+                            }
+                        });
+                });
+            });
         }
         function unitize(object, targetSize) {
 
@@ -146,158 +250,136 @@
 
             return theObject;
         }
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera2.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            camera2.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
         function init() {
-
+            scene = new THREE.Scene();
             renderer = new THREE.WebGLRenderer({
                 //antialias: true
             });
-            renderer.setPixelRatio(window.devicePixelRatio);
+            //renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setClearColor(0x888888);
-            renderer.autoClear = false;
-            //レンダラーに影描画設定追加
+            renderer.setClearColor(0x404040);
             document.body.appendChild(renderer.domElement);
-            renderer.shadowMap.enabled = true;
-            renderer.gammaInput = true;//光澤
-            renderer.gammaOutput = true;
-
-            clock = new THREE.Clock();
-            scene = new THREE.Scene();
+            document.addEventListener('mousedown', onDocumentMouseDown, false);
 
             camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
             camera.position.set(0, 250, 40);
-
-            camera2 = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
-            camera2.position.set(50, 10, 0);
-
             scene.add(camera);
-            scene.add(camera2);
             //camera.position.y = 300;  // important
-
             controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls2 = new THREE.OrbitControls(camera2, renderer.domElement);
+            var light = new THREE.AmbientLight(0x888888); // soft white light
+            scene.add(light);
+            gridXZ = new THREE.GridHelper(200, 20, 'red', 'white');
+            //scene.add(gridXZ);
+            /////////////////////////////////////////////////////////////////////
 
-            controls.minDistance = 20;
-            controls.maxDistance = 500;
-            controls.enablePan = false;
-            controls2.enableKeys = false;
-            window.addEventListener('resize', onWindowResize, false);
-            
-            gridXZ = new THREE.GridHelper(400, 20, 'red', 'white');
-            scene.add(gridXZ);
-            //var spotLight = new THREE.SpotLight( hex, intensity, distance, angle, penumbra, decay );
+            //var roomLight = new THREE.SpotLight( hex, intensity, distance, angle, penumbra, decay );
             //光色,強度,距離,角度,半影,衰減
-            spotLight = new THREE.SpotLight(0xffffff, 1);
-            spotLight.position.set(30, 50, 60);
+            roomLight = new THREE.SpotLight(0xffffff, 1);
+            roomLight.position.set(30, 80, 20);
 
-            spotLight.angle = Math.PI / 4;
-            spotLight.penumbra = 0.05;
-            spotLight.decay = 2;
-            spotLight.distance = 200;
+            roomLight.angle = Math.PI / 4;
+            roomLight.penumbra = 0.25;
+            //roomLight.decay = 2;
+            //roomLight.distance = 200;
+            roomLight.castShadow = true;//生成影子
+            ///////////////////////////////////////////////////////////////////
+            roomLight.shadow.mapSize.width = 1024;
+            roomLight.shadow.mapSize.height = 1024;
+            roomLight.shadow.camera.near = 50;//最短距離指定生成陰影的光源的最短距離
+            roomLight.shadow.camera.far = 1000;//指定生成陰影最長距離陰影的光源的最長距離。默認值是5000。
+            roomLight.shadow.camera.fov = 20;//指定生成陰影角度陰影的光源的角度
+            scene.add(roomLight);
+            //////////////////////////////////////////////////
+            //scene.add(new THREE.CameraHelper(roomLight.shadow.camera));
+            //scene.add(new THREE.SpotLightHelper(roomLight));
+            ///////////////////////////////////////////////////////////////////////////////////
+            lampLight = new THREE.SpotLight(0xffffff, 1);
+            lampLight.position.set(-12.5, 25, -5.5);
+            lampLight.angle = Math.PI / 2;
+            lampLight.penumbra = 0.25;
+            lampLight.distance = 50;
+            lampLight.castShadow = true;//生成影子
+            ///////////////////////////////////////////////////////////////////
+            lampLight.shadow.mapSize.width = 1024;
+            lampLight.shadow.mapSize.height = 1024;
+            lampLight.shadow.camera.near = 50;//最短距離指定生成陰影的光源的最短距離
+            lampLight.shadow.camera.far = 1000;//指定生成陰影最長距離陰影的光源的最長距離。默認值是5000。
+            lampLight.shadow.camera.fov = 20;//指定生成陰影角度陰影的光源的角度
+            scene.add(lampLight);
+            //////////////////////////////////////////////////
+            //scene.add(new THREE.CameraHelper(lampLight.shadow.camera));
+            //scene.add(new THREE.SpotLightHelper(lampLight));
+            ///////////////////////////////////////////////////////////////////////////////////////////////////
+            var floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200, 140, 140), new THREE.MeshLambertMaterial());
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
 
-            spotLight.castShadow = true;//生成影子
-            spotLight.shadow.mapSize.width = 1024;
-            spotLight.shadow.mapSize.height = 1024;
-            spotLight.shadow.camera.near = 10;//最短距離指定生成陰影的光源的最短距離
-            spotLight.shadow.camera.far = 200;//指定生成陰影最長距離陰影的光源的最長距離。默認值是5000。
-            
+            renderer.shadowMap.enabled = true;
+            //renderer.gammaInput = true;//光澤
+            //renderer.gammaOutput = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-            //spotLight.shadow.camera.fov = THREE.Math.radToDeg(2 * spotLight.angle);//指定生成陰影角度陰影的光源的角度
-            //spotLight.shadow.mapSize.width = spotLight.shadow.mapSize.height = 1024;//指定陰影的細度。基本上兩個將是平等的。缺省值是512。
-            scene.add(spotLight);
+            floor.receiveShadow = true;
 
-            spotLightShadowHelper = new THREE.CameraHelper(spotLight.shadow.camera);
-            scene.add(spotLightShadowHelper);
+            var geometry = new THREE.TorusKnotGeometry(10, 3, 100, 16);
+            var material = new THREE.MeshLambertMaterial({
+                color: 0xffff00
+            });
+            buildTable();
+            buildChair();
+            buildLamp();
 
-            spotLightHelper = new THREE.SpotLightHelper(spotLight);
-            scene.add(spotLightHelper);
-            //model = buildTank();
-            //scene.add(model);
-            //model.receiveShadow = true;
-            buildTank();
-            buildObstacle();
+            var controlBox = buildControl();
+            scene.add(controlBox);
+
+            roomLight.intensity = roomButton.on;
+            lampLight.intensity = lampButton.on;
+            window.addEventListener('resize', onWindowResize, false);
 
         }
-        function update(dt) {
-            keyboard.update();
-            if (keyboard.pressed('A')) {
-                angle += 0.02;
-                console.log(angle);
-            }
-            else if (keyboard.pressed('D')) {
-                angle -= 0.02;
-                console.log(angle);
-            }
-            if (keyboard.pressed('W')) {
-                speed += 2;
-                console.log(speed);
-            }
-            else if (keyboard.pressed('S')) {
-                speed -= 2;
-                console.log(speed);
-            }
-            speed = Math.clamp(speed, -20, 40);
+        function onDocumentMouseDown(event) {
 
-            vel = new THREE.Vector3(-speed, 0, 0);
+            event.preventDefault();
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-            vel.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);//旋轉用的
-            pos.add(vel.clone().multiplyScalar(dt));
-        }
-        function animate() {
-            controls2.update();
-            //controls2.update();
-            spotLightHelper.update();
-            spotLightShadowHelper.update();
+            // find intersections
+            raycaster.setFromCamera(mouse, camera);
+            var intersects = raycaster.intersectObjects(pickables, true);
+            if (intersects.length > 0) {
+                let picked = intersects[0].object.parent.name;
+                switch (picked) {
+                    case 'lampButton':
+                        lampButton.toggle();
+                        lampLight.intensity = lampButton.on;
+                        break;
+                    case 'roomButton':
+                        roomButton.toggle();
+                        roomLight.intensity = roomButton.on;
 
-            var dt = clock.getDelta();
-            update(dt);
-            //console.log("123: " + car);
-            console.log("car: " + car);
-            console.log("obstacle: " + obstacle);
-            if (car != undefined && obstacle != undefined) {
-                car.position.copy(pos);
-                car.rotation.y = angle;
-                //sssscamera2.rotation.y = angle;
-                camera2.position.set(car.position.x + 50, 10, car.position.z);
-                camera2.lookAt(car.position);
-                var distance = car.position.distanceTo(obstacle.position);//距離
-                if (distance < 19) {
-                    speed = 0;
+                        break;
                 }
             }
 
-            requestAnimationFrame(animate);
-            render();
-
         }
-        function render() {
-            var WW = window.innerWidth;
-            var HH = window.innerHeight;
-
-
-            renderer.setScissor(k, k, WW - 2 * k, HH - 2 * k);
-            renderer.enableScissorTest(true);
-
-            renderer.clear();
-            camera.aspect = WW / 2 / HH;
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        function animate() {
+            controls.update();
 
-            renderer.setViewport(0, 0, WW / 2, HH);
+            if (table != undefined) {
+                table.receiveShadow = true;
+                table.castShadow = true;
+            }
+
+            requestAnimationFrame(animate);
             renderer.render(scene, camera);
 
-            camera2.aspect = WW / 2 / HH;
-            camera2.updateProjectionMatrix();
-
-            renderer.setViewport(WW / 2, 0, WW / 2, HH);
-            renderer.render(scene, camera2);
         }
+
 
     </script>
 </body>
